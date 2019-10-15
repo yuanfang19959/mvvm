@@ -1,4 +1,5 @@
 const log = console.log;
+
 /**
  * 存放实例的一些参数
  * @param {Object} options 
@@ -39,7 +40,7 @@ function Observe(data) {
     let dep = new Dep();
     for (let key in data) {
         let val = data[key]
-
+        observe(val);
         Object.defineProperty(data, key, {
             enumerable: true,
             get() {
@@ -54,7 +55,7 @@ function Observe(data) {
 
                 // 这边新设置的属性可能是一个对象 所以需要继续监听
                 observe(val);
-                dep.notify();
+                dep.notify(); //设置新值 通知订阅者
             }
         })
 
@@ -62,7 +63,7 @@ function Observe(data) {
 }
 
 function observe(data) {
-    if (!data || typeof data != 'object') return;
+    if (!data || typeof data !== 'object') return;
     return new Observe(data);
 }
 
@@ -86,6 +87,7 @@ function Compile(el, vm) {
         Array.from(fragment.childNodes).forEach(node => {
             let text = node.textContent;
             let reg = /\{\{(.*)\}\}/
+            
             // 判断是不是文本节点，且含有{{}}
             if (node.nodeType === 3 && reg.test(text)) {
                 log(RegExp.$1) //a.a vm.b
@@ -95,30 +97,63 @@ function Compile(el, vm) {
                     val = val[key]
                 })
 
-                new Watcher(vm, RegExp.$1, function (newVal) {
-                    node.textContent = text.replace(/\{\{(.*)\}\}/, newVal);
-                })
 
-                node.textContent = text.replace(/\{\{(.*)\}\}/, val);
+                // 此处解析 将{{jj}} 变量替换为值
+                node.textContent = text.replace(reg, val);
+
+                // 这边更改新值后，watcher开始监听 并触发notify
+                new Watcher(vm, RegExp.$1, function (newVal) {
+                    node.textContent = text.replace(reg, newVal);
+                })
             }
 
             //根据指令判断 'Z-model'
+            // nodeType等于1是元素节点
             if (node.nodeType === 1) {
-                let nodeAttrs = node.attributes; //获取当前节点的属性
-                Array.from(nodeAttrs).forEach(function(attr){
+                let nodeAttrs = node.attributes; //获取当前节点的所有属性
+                Array.from(nodeAttrs).forEach(function (attr) {
                     let attrName = attr.name;
                     let attrVal = attr.value;
-                    if (attrName.indexOf('Z-') === 0) {
-                        node.value = vm[attrVal];
+                    let tempArray = attrVal.split('.');
+                    if (attrName.indexOf('z-model') == 0) {
+                        newO = vm;
+                        tempArray.forEach(key => {
+                            newO = newO[key]
+                        })
+                        node.value = newO
+                        // node.value = vm[newO];
+
+                        // 订阅
+                        new Watcher(vm, attrVal, function (newVal) {
+                            node.value = newVal;
+                        })
+
+                        node.addEventListener('input', function (e) {
+                            let newVal = e.target.value;
+                            // 当这里重新设置值的时候会触发set里面的notify方法
+                            let n = vm
+                            let len = tempArray.length - 1;
+
+                            if (!len) {
+                                vm[attrVal] = newVal;
+                            } else {
+                                tempArray.forEach((key, index) => {
+                                    n = n[key]
+                                    if (index === (tempArray.length - 2)) {
+                                        log(n)
+                                        let last = tempArray[len]
+                                        log(last)
+                                        n[last] = newVal;
+                                    }
+                                })
+                            }
+
+
+                            // vm[attrVal] = newVal;
+                        })
                     }
-                    new Watcher(vm, attrVal, function(newVal) {
-                        node.value = newVal;
-                    })
-                    node.addEventListener('input',function(e){
-                        let newVal = e.target.value;
-                        vm[attrVal] = newVal;
-                    })
-                } )
+
+                })
             }
 
             if (node.childNodes) {
@@ -143,11 +178,21 @@ Dep.prototype = {
     }
 }
 
+/**
+ * 发布过程
+ * @param {*} vm 当前MVVM实例 
+ * @param {*} exp 表达式 this.a.a
+ * @param {Function} fn  函数
+ */
 function Watcher(vm, exp, fn) {
     this.fn = fn;
     this.vm = vm;
     this.exp = exp;
+
+    // Dep.target 相当于即将订阅的目标
+    // this 代表 当前watch实例
     Dep.target = this;
+
     let val = vm;
     let arr = exp.split('.');
     arr.forEach(function (k) {
@@ -157,13 +202,12 @@ function Watcher(vm, exp, fn) {
 }
 
 Watcher.prototype = {
-
     update() {
-        let val = this.vm;
+        let newVal = this.vm;
         let arr = this.exp.split('.');
         arr.forEach(function (k) {
-            val = val[k]
+            newVal = newVal[k]
         })
-        this.fn(val);
+        this.fn(newVal);
     }
 }

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>双向绑定实现</title>
+    <script src="./js/Compile.js"></script>
+    <script src="./js/Mvvm.js"></script>
+    <script src="./js/Observe.js"></script>
+    <script src="./js/Watcher.js"></script>
+</head>
+<body>
+    <div id="app">
+        <h1>双向绑定原理</h1>
+        <br>
+        <h5>z-model="c" model不嵌套的情况</h5>
+        <input type="text" z-model="f" >
+        <div>{{f}}</div>
+
+        <br>
+        <h5>model嵌套的情况:如 z-model = "a.b.c.d"</h5>
+        <input type="text" z-model="a.b.c.d" >
+        <div>{{a.b.c.d}}</div>
+
+        <!-- 以上暂未考虑{{b}} {{a}}在一起的情况 -->
+        <!-- 目前正则方面知识有点欠缺 日后补上 -->
+    </div>
+    <script>
+        const vm = new MVVM({
+            el:'#app',
+            data:{
+                a:{
+                    b:{
+                        c:{
+                            d:1
+                        }
+                    }
+                },
+                f:'没有嵌套！'
+            }
+        })
+    </script>
+</body>
+</html>
